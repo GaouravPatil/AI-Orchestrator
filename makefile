@@ -19,16 +19,16 @@ help:
 
 
 db-up:
-	docker compose -f infra/docker-compose.yaml up -d
+	sudo docker compose -f infra/docker-compose.yaml up -d
 
 db-down:
-	docker compose -f infra/docker-compose.yaml down
+	sudo docker compose -f infra/docker-compose.yaml down
 
 db-logs:
-	docker compose -f infra/docker-compose.yaml logs -f postgres
+	sudo docker compose -f infra/docker-compose.yaml logs -f postgres
 
 db-shell:
-	docker exec -it postgres psql -U postgres -d orchestrator
+	sudo docker exec -it postgres psql -U postgres -d orchestrator
 
 run-auth:
 	cd backend/auth_service && \

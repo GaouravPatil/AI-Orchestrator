@@ -11,3 +11,10 @@ app.include_router(
     prefix="/k8s",
     tags=["Kubernetes"]
 )
+
+
+@app.get("/")
+def root():
+    return {
+        "message": "Kubernetes Service Running"
+    }

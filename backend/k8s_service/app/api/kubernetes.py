@@ -1,12 +1,54 @@
 from fastapi import APIRouter
 
-from k8s_service.app.services.kubernetes_service import KubernetesService
+from k8s_service.app.kubernetes.pod_manager import PodManager
+from k8s_service.app.kubernetes.namespace_manager import NamespaceManager
+from k8s_service.app.kubernetes.node_manager import NodeManager
+from k8s_service.app.kubernetes.deployment_manager import DeploymentManager
+
+from k8s_service.app.schemas.deployment import (
+    DeploymentRequest,
+    ScaleRequest,
+    DeleteDeploymentRequest,
+)
 
 k8s_router = APIRouter()
 
-service = KubernetesService()
+namespace_manager = NamespaceManager()
+pod_manager = PodManager()
+node_manager = NodeManager()
+deployment_manager = DeploymentManager()
 
 
 @k8s_router.get("/namespaces")
 def get_namespaces():
-    return service.list_namespaces()
+    return namespace_manager.list_namespaces()
+
+
+@k8s_router.get("/nodes")
+def get_nodes():
+    return node_manager.list_nodes()
+
+
+@k8s_router.get("/pods")
+def get_pods():
+    return pod_manager.list_pods()
+
+
+@k8s_router.get("/deployments")
+def get_deployments():
+    return deployment_manager.list_deployments()
+
+
+@k8s_router.post("/deploy")
+def deploy(request: DeploymentRequest):
+    return deployment_manager.create_deployment(request)
+
+
+@k8s_router.put("/scale")
+def scale(request: ScaleRequest):
+    return deployment_manager.scale_deployment(request)
+
+
+@k8s_router.delete("/deployment")
+def delete(request: DeleteDeploymentRequest):
+    return deployment_manager.delete_deployment(request)
