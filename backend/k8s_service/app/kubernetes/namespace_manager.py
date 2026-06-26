@@ -1,18 +1,26 @@
-from k8s_service.app.kubernetes.client import KubernetesClient
+from k8s_service.app.managers.base_manager import BaseManager
 
 
-class NamespaceManager:
+class NamespaceManager(BaseManager):
 
     def __init__(self):
-        self.client = KubernetesClient()
+        super().__init__()
 
     def list_namespaces(self):
+
+        self.logger.info("Fetching namespaces")
+
         namespaces = self.client.core_v1.list_namespace()
 
-        return [
+        data = [
             {
                 "name": ns.metadata.name,
                 "status": ns.status.phase,
             }
             for ns in namespaces.items
         ]
+
+        return self.success(
+            "Namespaces fetched successfully",
+            data
+        )

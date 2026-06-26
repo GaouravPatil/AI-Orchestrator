@@ -4,6 +4,7 @@ from k8s_service.app.kubernetes.pod_manager import PodManager
 from k8s_service.app.kubernetes.namespace_manager import NamespaceManager
 from k8s_service.app.kubernetes.node_manager import NodeManager
 from k8s_service.app.kubernetes.deployment_manager import DeploymentManager
+from k8s_service.app.orchestrator.executor import OrchestratorExecutor
 
 from k8s_service.app.schemas.deployment import (
     DeploymentRequest,
@@ -17,7 +18,7 @@ namespace_manager = NamespaceManager()
 pod_manager = PodManager()
 node_manager = NodeManager()
 deployment_manager = DeploymentManager()
-
+executor = OrchestratorExecutor()
 
 @k8s_router.get("/namespaces")
 def get_namespaces():
@@ -36,19 +37,20 @@ def get_pods():
 
 @k8s_router.get("/deployments")
 def get_deployments():
-    return deployment_manager.list_deployments()
+    return executor.list_deployments()
+
 
 
 @k8s_router.post("/deploy")
 def deploy(request: DeploymentRequest):
-    return deployment_manager.create_deployment(request)
+    return executor.create_deployment(request)
 
 
 @k8s_router.put("/scale")
 def scale(request: ScaleRequest):
-    return deployment_manager.scale_deployment(request)
+    return executor.scale_deployment(request)
 
 
 @k8s_router.delete("/deployment")
 def delete(request: DeleteDeploymentRequest):
-    return deployment_manager.delete_deployment(request)
+    return executor.delete_deployment(request)

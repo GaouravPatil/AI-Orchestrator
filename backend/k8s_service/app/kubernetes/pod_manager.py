@@ -1,12 +1,14 @@
-from k8s_service.app.kubernetes.client import KubernetesClient
+from k8s_service.app.managers.base_manager import BaseManager
 
 
-class PodManager:
+class PodManager(BaseManager):
 
     def __init__(self):
-        self.client = KubernetesClient()
+        super().__init__()
 
     def list_pods(self):
+
+        self.logger.info("Fetching pods from all namespaces")
 
         pods = self.client.core_v1.list_pod_for_all_namespaces()
 
@@ -32,4 +34,4 @@ class PodManager:
                 }
             )
 
-        return pod_list
+        return self.success("Pods fetched successfully", pod_list)

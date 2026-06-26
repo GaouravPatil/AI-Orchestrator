@@ -1,6 +1,6 @@
 from kubernetes import client
 
-from k8s_service.app.kubernetes.client import KubernetesClient
+from k8s_service.app.managers.base_manager import BaseManager
 from k8s_service.app.schemas.deployment import (
     DeploymentRequest,
     ScaleRequest,
@@ -8,16 +8,18 @@ from k8s_service.app.schemas.deployment import (
 )
 
 
-class DeploymentManager:
+class DeploymentManager(BaseManager):
 
     def __init__(self):
-        self.client = KubernetesClient()
+        super().__init__()
 
     # -------------------------------------------------
     # List Deployments
     # -------------------------------------------------
 
     def list_deployments(self):
+
+        self.logger.info("Fetching deployments from Kubernetes")
 
         deployments = self.client.apps_v1.list_deployment_for_all_namespaces()
 
@@ -41,13 +43,21 @@ class DeploymentManager:
                 }
             )
 
-        return deployment_list
+        return self.success(
+            "Deployments fetched successfully",
+            deployment_list,
+        )
 
     # -------------------------------------------------
     # Create Deployment
     # -------------------------------------------------
 
     def create_deployment(self, request: DeploymentRequest):
+
+        self.logger.info(
+            f"Creating deployment '{request.name}' "
+            f"in namespace '{request.namespace}'"
+        )
 
         container = client.V1Container(
             name=request.name,
@@ -90,16 +100,29 @@ class DeploymentManager:
             body=deployment,
         )
 
-        return {
-            "message": "Deployment created successfully",
-            "deployment": request.name,
-        }
+        self.logger.info(
+            f"Deployment '{request.name}' created successfully."
+        )
+
+        return self.success(
+            "Deployment created successfully",
+            {
+                "deployment": request.name,
+                "namespace": request.namespace,
+                "replicas": request.replicas,
+            },
+        )
 
     # -------------------------------------------------
     # Scale Deployment
     # -------------------------------------------------
 
     def scale_deployment(self, request: ScaleRequest):
+
+        self.logger.info(
+            f"Scaling deployment '{request.name}' "
+            f"to {request.replicas} replicas."
+        )
 
         deployment = self.client.apps_v1.read_namespaced_deployment(
             name=request.name,
@@ -114,10 +137,18 @@ class DeploymentManager:
             body=deployment,
         )
 
-        return {
-            "message": "Deployment scaled successfully",
-            "replicas": request.replicas,
-        }
+        self.logger.info(
+            f"Deployment '{request.name}' scaled successfully."
+        )
+
+        return self.success(
+            "Deployment scaled successfully",
+            {
+                "deployment": request.name,
+                "namespace": request.namespace,
+                "replicas": request.replicas,
+            },
+        )
 
     # -------------------------------------------------
     # Delete Deployment
@@ -125,12 +156,24 @@ class DeploymentManager:
 
     def delete_deployment(self, request: DeleteDeploymentRequest):
 
+        self.logger.info(
+            f"Deleting deployment '{request.name}' "
+            f"from namespace '{request.namespace}'"
+        )
+
         self.client.apps_v1.delete_namespaced_deployment(
             name=request.name,
             namespace=request.namespace,
         )
 
-        return {
-            "message": "Deployment deleted successfully",
-            "deployment": request.name,
-        }
+        self.logger.info(
+            f"Deployment '{request.name}' deleted successfully."
+        )
+
+        return self.success(
+            "Deployment deleted successfully",
+            {
+                "deployment": request.name,
+                "namespace": request.namespace,
+            },
+        )

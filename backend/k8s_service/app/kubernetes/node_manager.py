@@ -1,12 +1,14 @@
-from k8s_service.app.kubernetes.client import KubernetesClient
+from k8s_service.app.managers.base_manager import BaseManager
 
 
-class NodeManager:
+class NodeManager(BaseManager):
 
     def __init__(self):
-        self.client = KubernetesClient()
+        super().__init__()
 
     def list_nodes(self):
+
+        self.logger.info("Fetching cluster nodes")
 
         nodes = self.client.core_v1.list_node()
 
@@ -16,7 +18,7 @@ class NodeManager:
 
             roles = "worker"
 
-            labels = node.metadata.labels
+            labels = node.metadata.labels or {}
 
             if "node-role.kubernetes.io/control-plane" in labels:
                 roles = "control-plane"
@@ -24,7 +26,7 @@ class NodeManager:
             node_list.append(
                 {
                     "name": node.metadata.name,
-                    "status": node.status.conditions[-1].type,
+                    "status": node.status.conditions[-1].type if node.status.conditions else "Unknown",
                     "role": roles,
                     "kubelet_version": node.status.node_info.kubelet_version,
                     "os": node.status.node_info.operating_system,
@@ -32,4 +34,4 @@ class NodeManager:
                 }
             )
 
-        return node_list
+        return self.success("Nodes fetched successfully", node_list)
