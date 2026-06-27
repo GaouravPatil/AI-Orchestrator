@@ -2,19 +2,25 @@
 # AI DevOps Orchestrator
 # ==========================
 
-.PHONY: help db-up db-down db-logs db-shell \
-        run-auth run-k8s run-ai \
-        install-auth install-k8s install-ai \
-        freeze-auth freeze-k8s freeze-ai
+.PHONY: help run-all stop-all \
+        db-up db-down db-logs db-shell \
+        run-auth run-k8s run-ai run-monitor \
+        install-auth install-k8s install-ai install-monitor \
+        freeze-auth freeze-k8s freeze-ai freeze-monitor
 
 help:
 	@echo ""
 	@echo "  AI DevOps Orchestrator — Make Commands"
 	@echo "  ─────────────────────────────────────"
+	@echo "  All-in-one:"
+	@echo "    make run-all       Start ALL services in tmux (2x2 grid)"
+	@echo "    make stop-all      Stop ALL services"
+	@echo ""
 	@echo "  Services:"
-	@echo "    make run-auth      Run Auth Service     (port 8080)"
-	@echo "    make run-k8s       Run K8s Service      (port 8001)"
-	@echo "    make run-ai        Run AI Service       (port 8002)"
+	@echo "    make run-auth      Run Auth Service        (port 8080)"
+	@echo "    make run-k8s       Run K8s Service         (port 8001)"
+	@echo "    make run-ai        Run AI Service          (port 8002)"
+	@echo "    make run-monitor   Run Monitoring Service  (port 8003)"
 	@echo ""
 	@echo "  Database:"
 	@echo "    make db-up         Start PostgreSQL"
@@ -23,9 +29,10 @@ help:
 	@echo "    make db-shell      Open PostgreSQL shell"
 	@echo ""
 	@echo "  Dependencies:"
-	@echo "    make install-auth  Install auth_service deps"
-	@echo "    make install-k8s   Install k8s_service deps"
-	@echo "    make install-ai    Install ai_service deps"
+	@echo "    make install-auth     Install auth_service deps"
+	@echo "    make install-k8s      Install k8s_service deps"
+	@echo "    make install-ai       Install ai_service deps"
+	@echo "    make install-monitor  Install monitoring_service deps"
 	@echo ""
 
 
@@ -83,16 +90,48 @@ freeze-k8s:
 # ─── AI Service (port 8002) ──────────────────────────────────────────────────
 
 run-ai:
-	cd backend/ai-service && \
+	cd backend/ai_service && \
 		source ../auth_service/venv/bin/activate && \
 		PYTHONPATH=.. uvicorn main:app --reload --port 8002
 
 install-ai:
-	cd backend/ai-service && \
+	cd backend/ai_service && \
 		source ../auth_service/venv/bin/activate && \
 		pip install -r requirements.txt
 
 freeze-ai:
-	cd backend/ai-service && \
+	cd backend/ai_service && \
 		source ../auth_service/venv/bin/activate && \
 		pip freeze > requirements.txt
+
+
+# ─── Monitoring Service (port 8003) ──────────────────────────────────────────
+
+run-monitor:
+	cd backend/monitoring_service && \
+		source ../auth_service/venv/bin/activate && \
+		PYTHONPATH=.. uvicorn main:app --reload --port 8003
+
+install-monitor:
+	cd backend/monitoring_service && \
+		source ../auth_service/venv/bin/activate && \
+		pip install -r requirements.txt
+
+freeze-monitor:
+	cd backend/monitoring_service && \
+		source ../auth_service/venv/bin/activate && \
+		pip freeze > requirements.txt
+
+
+# ─── All services ─────────────────────────────────────────────────────────────
+
+run-all:
+	@echo "Starting all services in tmux session 'orchestrator'..."
+	@./start-all.sh
+
+stop-all:
+	@./stop-all.sh
+
+run-all-bg:
+	@echo "Starting all services in background (no tmux)..."
+	@./start-all.sh --no-tmux
