@@ -1,4 +1,6 @@
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI
+# pyrefly: ignore [missing-import]
 from fastapi.middleware.cors import CORSMiddleware
 
 from k8s_service.app.api.kubernetes import k8s_router

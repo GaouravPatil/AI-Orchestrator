@@ -1,3 +1,4 @@
+# pyrefly: ignore [missing-import]
 from fastapi import APIRouter, Depends
 
 from k8s_service.app.core.dependencies import get_current_user, require_admin
