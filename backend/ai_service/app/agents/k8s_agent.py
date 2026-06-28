@@ -21,30 +21,30 @@ from ai_service.app.tools import k8s_tools
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are an AI DevOps assistant for a Kubernetes cluster.
-You help users query and manage their cluster using natural language.
+SYSTEM_PROMPT = """
+You are an AI DevOps assistant for a live Kubernetes cluster.
+Your job is to answer user questions by calling the appropriate tool — NEVER guess or invent data.
 
-When you need to take an action, respond ONLY with a valid JSON block like this:
-{
-  "thought": "Brief reasoning about why you're calling this tool",
-  "action": "tool_name",
-  "params": { "key": "value" }
-}
+RULES (follow strictly):
+1. When the user asks for cluster information (nodes, pods, deployments, etc.), you MUST call the relevant tool first.
+2. To call a tool, output ONLY a raw JSON object (no markdown, no backticks, no extra text):
+   {"thought": "<why you are calling this tool>", "action": "<tool_name>", "params": {<key: value>}}
+3. Do NOT include any text before or after the JSON.
+4. NEVER make up or hallucinate Kubernetes resource names, statuses, or counts.
+5. Only after receiving real tool results should you compose a plain-text answer.
+6. If no tool is needed (e.g. a general question), respond in plain text only.
 
 Available tools:
-- list_namespaces()
-- list_nodes()
-- list_pods()
-- list_deployments()
-- list_services(namespace)
-- list_events(namespace)
-- get_pod_logs(namespace, pod_name, tail=50)
-- create_deployment(name, image, replicas, namespace, port)
-- scale_deployment(name, replicas, namespace)
-- delete_deployment(name, namespace)
-
-If you don't need to call a tool, respond naturally in plain text.
-Always be concise, accurate, and helpful.
+- list_namespaces()                                         → list all namespaces
+- list_nodes()                                              → list all cluster nodes
+- list_pods()                                               → list all pods across namespaces
+- list_deployments()                                        → list all deployments
+- list_services(namespace)                                  → list services in a namespace
+- list_events(namespace)                                    → list recent events in a namespace
+- get_pod_logs(namespace, pod_name, tail=50)                → get pod logs
+- create_deployment(name, image, replicas, namespace, port) → create a deployment
+- scale_deployment(name, replicas, namespace)               → scale a deployment
+- delete_deployment(name, namespace)                        → delete a deployment
 """
 
 # ── Tool registry ─────────────────────────────────────────────────────────────
@@ -123,10 +123,29 @@ class K8sAgent:
             raw_reply = self.llm.chat(history)
             step = AgentStep(iteration=iteration)
 
-            # Try to parse a tool-call JSON block
+            # ── Robust JSON extraction ─────────────────────────────────────
+            # llama3 sometimes wraps JSON in ```json ... ``` fences.
+            # Strip those before attempting to parse.
+            cleaned = raw_reply.strip()
+            if cleaned.startswith("```"):
+                # Remove opening fence (```json or ``` etc.)
+                cleaned = cleaned.split("\n", 1)[-1]
+                # Remove closing fence
+                if cleaned.endswith("```"):
+                    cleaned = cleaned.rsplit("```", 1)[0]
+                cleaned = cleaned.strip()
+
+            # Also try to extract a JSON object from within the text
+            # in case the LLM added preamble before the JSON
+            if not cleaned.startswith("{"):
+                import re
+                json_match = re.search(r'\{[\s\S]*"action"[\s\S]*\}', cleaned)
+                if json_match:
+                    cleaned = json_match.group(0)
+
             tool_called = False
             try:
-                parsed = json.loads(raw_reply.strip())
+                parsed = json.loads(cleaned)
                 if isinstance(parsed, dict) and "action" in parsed:
                     tool_name = parsed["action"]
                     params    = parsed.get("params", {})
@@ -157,15 +176,41 @@ class K8sAgent:
                         "content": (
                             f"Tool '{tool_name}' returned:\n"
                             f"{json.dumps(tool_result, default=str)}\n\n"
-                            "Now give a concise, helpful answer to the user based on this data."
+                            "Now give a concise, helpful plain-text answer to the user based on this real data. "
+                            "Do NOT output JSON."
                         ),
                     })
 
                     tool_called = True
 
             except (json.JSONDecodeError, TypeError):
-                # LLM replied in plain text — no tool call needed
-                pass
+                # ── LLM replied in plain text ──────────────────────────────
+                # On iteration 1, if the reply looks like hallucinated data
+                # (no tool was called but question needs real cluster info),
+                # inject a correction and retry once.
+                if iteration == 1 and not tool_called:
+                    tool_keywords = [
+                        "node", "pod", "deployment", "namespace", "service",
+                        "log", "scale", "delete", "create", "event", "cluster"
+                    ]
+                    original_msg = history[-2]["content"] if len(history) >= 2 else ""
+                    needs_tool = any(kw in original_msg.lower() for kw in tool_keywords)
+                    if needs_tool:
+                        logger.warning(
+                            f"[{conversation_id}] LLM skipped tool on iteration 1 — injecting correction"
+                        )
+                        history.append({"role": "assistant", "content": raw_reply})
+                        history.append({
+                            "role": "user",
+                            "content": (
+                                "IMPORTANT: You must NOT guess or invent cluster data. "
+                                "Call the appropriate tool first by outputting ONLY a raw JSON object: "
+                                '{"thought": "<reason>", "action": "<tool_name>", "params": {}}'
+                                " — no markdown, no extra text."
+                            ),
+                        })
+                        steps.append(step)
+                        continue
 
             steps.append(step)
 
