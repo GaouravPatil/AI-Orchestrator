@@ -1,13 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import OAuth2PasswordBearer
+
+# pyrefly: ignore [missing-import]
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
+# pyrefly: ignore [missing-import]
+from fastapi.security import OAuth2PasswordBearer
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/auth/login"
+)
 
 from auth_service.app.schemas.user import UserLogin, UserRegister, UserResponse
 from auth_service.app.services.auth_service import AuthService
 from shared.database.session import get_db
 from shared.security.jwt import verify_access_token
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 auth_router = APIRouter()
 

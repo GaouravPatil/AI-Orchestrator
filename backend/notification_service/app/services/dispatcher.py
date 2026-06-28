@@ -118,6 +118,7 @@ class NotificationDispatcher:
             "slack":   bool(settings.SLACK_WEBHOOK_URL),
             "discord": bool(settings.DISCORD_WEBHOOK_URL),
             "webhook": bool(settings.GENERIC_WEBHOOK_URL),
+            "datadog": bool(settings.DATADOG_API_KEY),
             "email":   bool(settings.SMTP_HOST and settings.SMTP_TO),
         }
 
@@ -130,6 +131,8 @@ class NotificationDispatcher:
         if settings.DISCORD_WEBHOOK_URL:
             active.append(NotificationChannel.DISCORD)
         if settings.GENERIC_WEBHOOK_URL:
+            # Generic webhook covers: custom receivers, Grafana Alertmanager
+            # callbacks, n8n workflows, PagerDuty, Opsgenie, etc.
             active.append(NotificationChannel.WEBHOOK)
         if settings.SMTP_HOST and settings.SMTP_TO:
             active.append(NotificationChannel.EMAIL)
@@ -210,6 +213,59 @@ class NotificationDispatcher:
         )
         if not r.is_success:
             return False, f"Webhook HTTP {r.status_code}: {r.text}"
+        return True, None
+
+    def _send_datadog(self, alert: AlertPayload) -> tuple[bool, Optional[str]]:
+        """
+        Posts to Datadog Events v1 API.
+        Docs: https://docs.datadoghq.com/api/latest/events/#post-an-event
+
+        Severity mapping:
+          critical → error   (shows red in Datadog)
+          warning  → warning (shows yellow)
+          info     → info    (shows blue)
+        """
+        dd_alert_type = {
+            AlertSeverity.CRITICAL: "error",
+            AlertSeverity.WARNING:  "warning",
+            AlertSeverity.INFO:     "info",
+        }.get(alert.severity, "info")
+
+        # Tags: base tags from config + alert-specific tags
+        tags = [t.strip() for t in settings.DATADOG_TAGS.split(",") if t.strip()]
+        tags += [
+            f"alert_type:{alert.alert_type}",
+            f"severity:{alert.severity.value}",
+            f"resource:{alert.resource.replace('/', '_')}",
+        ]
+
+        payload = {
+            "title": f"[{alert.severity.upper()}] {alert.alert_type} — {alert.resource}",
+            "text": (
+                f"%%% \n"
+                f"**Resource**: `{alert.resource}`  \n"
+                f"**Message**: {alert.message}  \n"
+                f"**Detected At**: {alert.detected_at.isoformat()}  \n"
+                + (f"**Meta**: `{alert.meta}`  \n" if alert.meta else "")
+                + "%%%"
+            ),
+            "alert_type": dd_alert_type,
+            "priority": "normal" if alert.severity != AlertSeverity.CRITICAL else "high",
+            "tags": tags,
+            # Aggregation key — Datadog groups events with the same key
+            "aggregation_key": f"{alert.alert_type}:{alert.resource}",
+            "source_type_name": "kubernetes",
+        }
+
+        url = f"https://api.{settings.DATADOG_SITE}/api/v1/events"
+        r = httpx.post(
+            url,
+            json=payload,
+            headers={"DD-API-KEY": settings.DATADOG_API_KEY, "Content-Type": "application/json"},
+            timeout=10,
+        )
+        if not r.is_success:
+            return False, f"Datadog HTTP {r.status_code}: {r.text}"
         return True, None
 
     def _send_email(self, alert: AlertPayload) -> tuple[bool, Optional[str]]:

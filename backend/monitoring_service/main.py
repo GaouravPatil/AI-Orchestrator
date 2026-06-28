@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from monitoring_service.app.api.monitor import monitor_router
+from monitoring_service.app.api.monitor import monitor_public_router, monitor_router
 from monitoring_service.app.core.config import settings
 from monitoring_service.app.core.logger import logger
 from monitoring_service.app.tasks.background import poll_loop
@@ -56,3 +56,5 @@ def root():
 
 
 app.include_router(monitor_router, prefix="/monitor", tags=["Monitoring"])
+# Public endpoints (no auth) — mounted at the same /monitor prefix
+app.include_router(monitor_public_router, prefix="/monitor")

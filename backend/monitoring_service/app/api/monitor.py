@@ -18,6 +18,9 @@ from monitoring_service.app.services.health_aggregator import health_aggregator
 
 monitor_router = APIRouter(dependencies=[Depends(get_current_user)])
 
+# Public router — no auth (Prometheus scrapes /metrics without credentials)
+monitor_public_router = APIRouter()
+
 
 # ── Cluster health overview ───────────────────────────────────────────────────
 
@@ -123,13 +126,14 @@ def get_snapshot_history():
     }
 
 
-# ── Prometheus metrics ────────────────────────────────────────────────────────
+# ── Prometheus metrics — PUBLIC (no auth, Prometheus scraper) ────────────────
 
-@monitor_router.get(
+@monitor_public_router.get(
     "/metrics",
     response_class=PlainTextResponse,
-    summary="Prometheus-compatible metrics",
+    summary="Prometheus-compatible metrics (public — no auth required)",
     include_in_schema=True,
+    tags=["Metrics"],
 )
 def get_prometheus_metrics():
     """

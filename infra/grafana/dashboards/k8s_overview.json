@@ -1,0 +1,175 @@
+{
+  "id": null,
+  "uid": "k8s-orchestrator",
+  "title": "AI DevOps Orchestrator — Cluster Overview",
+  "tags": ["kubernetes", "orchestrator"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Total Pods",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [{ "color": "green", "value": null }] }
+        }
+      },
+      "targets": [{ "datasource": "Prometheus", "expr": "k8s_pods_total", "legendFormat": "Pods" }]
+    },
+    {
+      "id": 2,
+      "title": "Running Pods",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "steps": [{ "color": "green", "value": null }] }
+        }
+      },
+      "targets": [{ "datasource": "Prometheus", "expr": "k8s_pods_running", "legendFormat": "Running" }]
+    },
+    {
+      "id": 3,
+      "title": "Pending Pods",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "targets": [{ "datasource": "Prometheus", "expr": "k8s_pods_pending", "legendFormat": "Pending" }]
+    },
+    {
+      "id": 4,
+      "title": "Failed Pods",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [{ "datasource": "Prometheus", "expr": "k8s_pods_failed", "legendFormat": "Failed" }]
+    },
+    {
+      "id": 5,
+      "title": "Active Alerts",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 3 }
+            ]
+          }
+        }
+      },
+      "targets": [{ "datasource": "Prometheus", "expr": "k8s_active_alerts", "legendFormat": "Alerts" }]
+    },
+    {
+      "id": 6,
+      "title": "Nodes Ready",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "options": { "colorMode": "background", "graphMode": "none" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "targets": [{ "datasource": "Prometheus", "expr": "k8s_nodes_ready", "legendFormat": "Ready Nodes" }]
+    },
+    {
+      "id": 7,
+      "title": "Pod Status Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } }
+      },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "k8s_pods_running", "legendFormat": "Running" },
+        { "datasource": "Prometheus", "expr": "k8s_pods_pending", "legendFormat": "Pending" },
+        { "datasource": "Prometheus", "expr": "k8s_pods_failed",  "legendFormat": "Failed" }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Active Alerts Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } }
+      },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "k8s_active_alerts",    "legendFormat": "Active Alerts" },
+        { "datasource": "Prometheus", "expr": "k8s_critical_alerts",  "legendFormat": "Critical" }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Pod Restart Counts",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "options": { "sortBy": [{ "displayName": "Value", "desc": true }] },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "k8s_pod_restarts_total > 0",
+          "legendFormat": "{{namespace}}/{{pod}}",
+          "instant": true,
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Notifications Dispatched",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "datasource": "Prometheus", "expr": "notify_dispatched_total",   "legendFormat": "Total Dispatched" },
+        { "datasource": "Prometheus", "expr": "notify_success_total",      "legendFormat": "Successful" },
+        { "datasource": "Prometheus", "expr": "notify_suppressed_total",   "legendFormat": "Suppressed (dedup)" }
+      ]
+    }
+  ]
+}

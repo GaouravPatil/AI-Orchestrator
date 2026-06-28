@@ -44,12 +44,15 @@ kill_port 8080
 kill_port 8001
 kill_port 8002
 kill_port 8003
+kill_port 8004
 
 # ── Service commands ──────────────────────────────────────────────
 AUTH_CMD="cd '$BACKEND/auth_service' && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --port 8080"
 K8S_CMD="cd '$BACKEND/k8s_service'   && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --port 8001"
 AI_CMD="cd '$BACKEND/ai_service'     && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --port 8002"
-MON_CMD="cd '$BACKEND/monitoring_service' && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --port 8003"
+# --host 0.0.0.0 so Prometheus (Docker) can reach the /metrics endpoints from outside 127.0.0.1
+MON_CMD="cd '$BACKEND/monitoring_service' && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --host 0.0.0.0 --port 8003"
+NOTIFY_CMD="cd '$BACKEND/notification_service' && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --host 0.0.0.0 --port 8004"
 
 # ══════════════════════════════════════════════════════════════════
 #  MODE 1: tmux (default)
@@ -76,7 +79,11 @@ if [[ "${1:-}" != "--no-tmux" ]] && command -v tmux &>/dev/null; then
 
   # Split the right pane horizontally → ai (below k8s)
   tmux split-window -v -t "$SESSION:0.1" \
-    "bash -c \"$AI_CMD; echo '--- ai_service exited ---'; read\""
+      "bash -c \"$AI_CMD; echo '--- ai_service exited ---'; read\"" 
+
+  # Open a new window for notification_service
+  tmux new-window -t "$SESSION" -n "notify" \
+    "bash -c \"$NOTIFY_CMD; echo '--- notification_service exited ---'; read\""
 
   # Equalise pane sizes
   tmux select-layout -t "$SESSION:0" tiled
@@ -84,7 +91,7 @@ if [[ "${1:-}" != "--no-tmux" ]] && command -v tmux &>/dev/null; then
   # Add a status bar with port info
   tmux set-option -t "$SESSION" status on
   tmux set-option -t "$SESSION" status-left  " ${BOLD}AI-Orchestrator${NC} "
-  tmux set-option -t "$SESSION" status-right " auth:8080 | k8s:8001 | ai:8002 | monitor:8003 "
+  tmux set-option -t "$SESSION" status-right " auth:8080 | k8s:8001 | ai:8002 | monitor:8003 | notify:8004 "
 
   # Attach
   echo ""
@@ -92,6 +99,7 @@ if [[ "${1:-}" != "--no-tmux" ]] && command -v tmux &>/dev/null; then
   echo -e "  ${GREEN}✅ k8s_service      → http://localhost:8001/docs${NC}"
   echo -e "  ${GREEN}✅ ai_service       → http://localhost:8002/docs${NC}"
   echo -e "  ${GREEN}✅ monitoring_svc   → http://localhost:8003/docs${NC}"
+  echo -e "  ${GREEN}✅ notify_svc       → http://localhost:8004/docs${NC}"
   echo ""
   echo -e "  ${CYAN}Attaching to tmux session '${SESSION}'...${NC}"
   echo -e "  ${YELLOW}Tip: Ctrl+B then D to detach, ./stop-all.sh to stop all${NC}"
@@ -108,18 +116,20 @@ else
   echo -e "${BOLD}Starting services in background (logs → .logs/)...${NC}"
 
   # Start each service, capturing PID
-  (eval "$AUTH_CMD" > "$LOG_DIR/auth.log" 2>&1)   & AUTH_PID=$!
-  (eval "$K8S_CMD"  > "$LOG_DIR/k8s.log"  2>&1)   & K8S_PID=$!
-  (eval "$AI_CMD"   > "$LOG_DIR/ai.log"   2>&1)   & AI_PID=$!
-  (eval "$MON_CMD"  > "$LOG_DIR/monitor.log" 2>&1) & MON_PID=$!
+  (eval "$AUTH_CMD" > "$LOG_DIR/auth.log" 2>&1)      & AUTH_PID=$!
+  (eval "$K8S_CMD"  > "$LOG_DIR/k8s.log"  2>&1)      & K8S_PID=$!
+  (eval "$AI_CMD"   > "$LOG_DIR/ai.log"   2>&1)      & AI_PID=$!
+  (eval "$MON_CMD"  > "$LOG_DIR/monitor.log" 2>&1)   & MON_PID=$!
+  (eval "$NOTIFY_CMD" > "$LOG_DIR/notify.log" 2>&1)  & NOTIFY_PID=$!
 
-  echo "$AUTH_PID $K8S_PID $AI_PID $MON_PID" > "$LOG_DIR/pids"
+  echo "$AUTH_PID $K8S_PID $AI_PID $MON_PID $NOTIFY_PID" > "$LOG_DIR/pids"
 
   echo ""
-  echo -e "  ${GREEN}✅ auth_service     PID=$AUTH_PID → http://localhost:8080/docs${NC}"
-  echo -e "  ${GREEN}✅ k8s_service      PID=$K8S_PID  → http://localhost:8001/docs${NC}"
-  echo -e "  ${GREEN}✅ ai_service       PID=$AI_PID   → http://localhost:8002/docs${NC}"
-  echo -e "  ${GREEN}✅ monitoring_svc   PID=$MON_PID  → http://localhost:8003/docs${NC}"
+  echo -e "  ${GREEN}✅ auth_service     PID=$AUTH_PID    → http://localhost:8080/docs${NC}"
+  echo -e "  ${GREEN}✅ k8s_service      PID=$K8S_PID     → http://localhost:8001/docs${NC}"
+  echo -e "  ${GREEN}✅ ai_service       PID=$AI_PID      → http://localhost:8002/docs${NC}"
+  echo -e "  ${GREEN}✅ monitoring_svc   PID=$MON_PID     → http://localhost:8003/docs${NC}"
+  echo -e "  ${GREEN}✅ notify_svc       PID=$NOTIFY_PID  → http://localhost:8004/docs${NC}"
   echo ""
   echo -e "  ${YELLOW}Tailing logs (Ctrl+C to detach — services keep running)${NC}"
   echo -e "  ${YELLOW}Run ./stop-all.sh to stop everything${NC}"
@@ -131,5 +141,6 @@ else
     <(tail -F "$LOG_DIR/auth.log"    2>/dev/null | sed "s/^/[${GREEN}auth   ${NC}] /") \
     <(tail -F "$LOG_DIR/k8s.log"     2>/dev/null | sed "s/^/[${CYAN}k8s    ${NC}] /") \
     <(tail -F "$LOG_DIR/ai.log"      2>/dev/null | sed "s/^/[${YELLOW}ai     ${NC}] /") \
-    <(tail -F "$LOG_DIR/monitor.log" 2>/dev/null | sed "s/^/[${RED}monitor${NC}] /")
+    <(tail -F "$LOG_DIR/monitor.log" 2>/dev/null | sed "s/^/[${RED}monitor${NC}] /") \
+    <(tail -F "$LOG_DIR/notify.log"  2>/dev/null | sed "s/^/[notify ] /")
 fi

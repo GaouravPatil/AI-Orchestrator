@@ -21,6 +21,7 @@ class NotificationChannel(str, Enum):
     SLACK = "slack"
     DISCORD = "discord"
     WEBHOOK = "webhook"
+    DATADOG = "datadog"
     EMAIL = "email"
 
 
@@ -54,6 +55,7 @@ class ChannelStatusResponse(BaseModel):
     slack: bool
     discord: bool
     webhook: bool
+    datadog: bool
     email: bool
 
 

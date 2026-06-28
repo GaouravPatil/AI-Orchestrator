@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from shared.database.base import Base
 from shared.database.session import engine
 from auth_service.app.api.auth import auth_router
-from auth_service.app.models.user import User
+from auth_service.app.models.user import User  
 
 Base.metadata.create_all(bind=engine)
 

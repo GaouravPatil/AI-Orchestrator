@@ -1,7 +1,7 @@
 #!/bin/bash
 # ════════════════════════════════════════════════════════════════
 #  AI-Orchestrator — Stop All Services
-#  Kills any process on ports 8080, 8001, 8002, 8003
+#  Kills any process on ports 8080, 8001, 8002, 8003, 8004
 #  and kills the tmux 'orchestrator' session if running.
 # ════════════════════════════════════════════════════════════════
 
@@ -38,6 +38,7 @@ kill_port 8080 "auth_service"
 kill_port 8001 "k8s_service"
 kill_port 8002 "ai_service"
 kill_port 8003 "monitoring_service"
+kill_port 8004 "notification_service"
 
 # ── Clean up PID file ─────────────────────────────────────────────
 [ -f "$LOG_DIR/pids" ] && rm -f "$LOG_DIR/pids"

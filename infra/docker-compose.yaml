@@ -1,5 +1,6 @@
 services:
 
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16
     container_name: orchestrator-postgres
@@ -22,5 +23,63 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Prometheus ─────────────────────────────────────────────────────────────
+  # Scrapes /monitor/metrics (cluster metrics) and /notify/metrics (dispatch stats)
+  # UI: http://localhost:9090
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: orchestrator-prometheus
+    restart: unless-stopped
+
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"          # allows hot-reload via POST /-/reload
+
+    ports:
+      - "9090:9090"
+
+    # host.docker.internal resolves to your host machine (where our FastAPI services run)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ── Grafana ────────────────────────────────────────────────────────────────
+  # Visualises Prometheus metrics + alerting rules
+  # UI: http://localhost:3001  (admin / admin — change on first login)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: orchestrator-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin       # Change this!
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_HTTP_PORT: "3001"
+      # Anonymous access for development (disable in prod)
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Allow Grafana to reach host services for webhook alerts
+      GF_SMTP_ENABLED: "false"
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      # Provisioning: auto-configure Prometheus datasource + dashboards
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+    ports:
+      - "3001:3001"
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   postgres_data:
+  prometheus_data:
+  grafana_data:

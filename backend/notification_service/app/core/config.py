@@ -39,8 +39,16 @@ class Settings(BaseSettings):
     # Discord
     DISCORD_WEBHOOK_URL: str = ""       # e.g. https://discord.com/api/webhooks/...
 
-    # Generic webhook (POST JSON)
+    # Generic webhook (POST JSON AlertPayload to any URL — custom receivers)
     GENERIC_WEBHOOK_URL: str = ""
+
+    # Datadog Events API
+    # Get your API key at: https://app.datadoghq.com/organization-settings/api-keys
+    DATADOG_API_KEY: str = ""
+    # Use "datadoghq.com" for US, "datadoghq.eu" for EU
+    DATADOG_SITE: str = "datadoghq.com"
+    # Comma-separated tags added to every Datadog event
+    DATADOG_TAGS: str = "source:k8s-orchestrator,env:local"
 
     # Email (SMTP) — optional
     SMTP_HOST: str = ""

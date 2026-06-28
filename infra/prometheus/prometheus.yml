@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # ── monitoring_service — cluster metrics ──────────────────────────────────
+  # Public endpoint — no auth required. Exposes k8s_pods_total, k8s_nodes_ready, etc.
+  - job_name: "monitoring_service"
+    scrape_interval: 30s
+    metrics_path: /monitor/metrics
+    static_configs:
+      - targets: ["192.168.31.186:8003"]
+        labels:
+          service: "monitoring_service"
+
+  # ── notification_service — dispatch metrics ───────────────────────────────
+  # Public endpoint — exposes notify_dispatched_total, notify_success_total, etc.
+  - job_name: "notification_service"
+    scrape_interval: 30s
+    metrics_path: /notify/metrics
+    static_configs:
+      - targets: ["192.168.31.186:8004"]
+        labels:
+          service: "notification_service"
