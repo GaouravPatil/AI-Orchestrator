@@ -55,5 +55,5 @@ class ChatResponse(BaseModel):
     namespace: str
     steps: list[AgentStep] = Field(default_factory=list)   # full agentic trace
     model: str
-    provider: str = "ollama"
+    provider: str = "gemini"
     total_tokens: Optional[int] = None

@@ -34,7 +34,7 @@ def chat(
         )
         return ChatResponse(**result)
     except RuntimeError as e:
-        # Structured errors from OllamaService / k8s_tools
+        # Structured errors from GeminiService / k8s_tools
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.exception(f"Unexpected error in /ai/chat: {e}")
@@ -46,5 +46,5 @@ def health():
     return {
         "status": "running",
         "model": agent.llm.model,
-        "provider": "ollama",
+        "provider": "gemini",
     }

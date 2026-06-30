@@ -13,7 +13,6 @@ set -euo pipefail
 SESSION="orchestrator"
 REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
 BACKEND="$REPO_ROOT/backend"
-VENV="$BACKEND/auth_service/venv/bin/activate"
 LOG_DIR="$REPO_ROOT/.logs"
 
 # ── Colours ───────────────────────────────────────────────────────
@@ -46,13 +45,15 @@ kill_port 8002
 kill_port 8003
 kill_port 8004
 
-# ── Service commands ──────────────────────────────────────────────
-AUTH_CMD="cd '$BACKEND/auth_service' && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --port 8080"
-K8S_CMD="cd '$BACKEND/k8s_service'   && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --port 8001"
-AI_CMD="cd '$BACKEND/ai_service'     && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --port 8002"
-# --host 0.0.0.0 so Prometheus (Docker) can reach the /metrics endpoints from outside 127.0.0.1
-MON_CMD="cd '$BACKEND/monitoring_service' && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --host 0.0.0.0 --port 8003"
-NOTIFY_CMD="cd '$BACKEND/notification_service' && source '$VENV' && PYTHONPATH='$BACKEND' uvicorn main:app --reload --host 0.0.0.0 --port 8004"
+# ── Venv binary (shared across all services) ─────────────────────
+VENV="$BACKEND/auth_service/venv/bin/python3"
+
+# ── Service commands (use direct binary — `source activate` is unreliable in subshells) ──
+AUTH_CMD="cd '$BACKEND/auth_service'         && PYTHONPATH='$BACKEND' '$VENV' -m uvicorn main:app --reload --host 0.0.0.0 --port 8080"
+K8S_CMD="cd '$BACKEND/k8s_service'           && PYTHONPATH='$BACKEND' '$VENV' -m uvicorn main:app --reload --host 0.0.0.0 --port 8001"
+AI_CMD="cd '$BACKEND/ai_service'             && PYTHONPATH='$BACKEND' '$VENV' -m uvicorn main:app --reload --host 0.0.0.0 --port 8002"
+MON_CMD="cd '$BACKEND/monitoring_service'    && PYTHONPATH='$BACKEND' '$VENV' -m uvicorn main:app --reload --host 0.0.0.0 --port 8003"
+NOTIFY_CMD="cd '$BACKEND/notification_service' && PYTHONPATH='$BACKEND' '$VENV' -m uvicorn main:app --reload --host 0.0.0.0 --port 8004"
 
 # ══════════════════════════════════════════════════════════════════
 #  MODE 1: tmux (default)

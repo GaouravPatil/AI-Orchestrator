@@ -1,10 +1,10 @@
 #!/bin/bash
-# Run k8s_service with shared and k8s_service modules accessible
-export PYTHONPATH="$(dirname "$PWD")"
-# Use the auth_service venv if k8s doesn't have its own, or activate local one if it exists
-if [ -d "venv" ]; then
-    source venv/bin/activate
-elif [ -d "../auth_service/venv" ]; then
-    source ../auth_service/venv/bin/activate
-fi
-uvicorn main:app --reload --port 8001
+# Run k8s_service with shared module accessible
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
+export PYTHONPATH="$BACKEND_DIR"
+cd "$SCRIPT_DIR"
+[ -f "venv/bin/uvicorn" ] && UVICORN="$SCRIPT_DIR/venv/bin/uvicorn" \
+  || UVICORN="$BACKEND_DIR/auth_service/venv/bin/uvicorn"
+echo "Starting k8s-service on port 8001"
+exec "$UVICORN" main:app --reload --host 0.0.0.0 --port 8001

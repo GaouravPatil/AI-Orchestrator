@@ -232,3 +232,50 @@
   border-radius: 4px;
   font-size: 0.72rem;
 }
+
+/* ── Inline link button (Sign Up / Sign In) ──────────────────────────── */
+.link-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--cyan);
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color 0.2s, opacity 0.2s;
+  opacity: 0.85;
+}
+.link-btn:hover {
+  opacity: 1;
+  color: var(--blue);
+}
+
+/* ── Signup success banner ───────────────────────────────────────────── */
+.signup-success {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(0, 255, 136, 0.06);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+  border-radius: var(--radius-md);
+  color: var(--green);
+  animation: animate-fade-up 0.4s ease both;
+}
+.signup-success svg {
+  flex-shrink: 0;
+  color: var(--green);
+}
+.signup-success-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  color: var(--green);
+  margin-bottom: 4px;
+}
+.signup-success-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}

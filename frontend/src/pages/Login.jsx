@@ -3,7 +3,7 @@ import { login, setToken, setUser } from '../services/api';
 import JarvisBackground from '../components/JarvisBackground';
 import '../styles/Login.css';
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, onGoToSignup }) {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
@@ -23,7 +23,14 @@ export default function Login({ onLogin }) {
       setUser({ email: payload.sub, role: payload.role });
       onLogin();
     } catch (err) {
-      setError(err.response?.data?.detail || 'Authentication failed. Check credentials.');
+      const detail = err.response?.data?.detail;
+      if (!err.response) {
+        setError('Cannot reach the server. Make sure the backend is running.');
+      } else if (typeof detail === 'string') {
+        setError(detail);
+      } else {
+        setError('Authentication failed. Check credentials.');
+      }
     } finally {
       setLoading(false);
     }
@@ -139,6 +146,16 @@ export default function Login({ onLogin }) {
               <span className="badge badge-cyan">v1.0.0</span>
             </div>
             <p>AI DevOps Orchestrator — Kubernetes Intelligence</p>
+            <p style={{ marginTop: '6px' }}>
+              No account?{' '}
+              <button
+                id="go-to-signup"
+                onClick={onGoToSignup}
+                className="link-btn"
+              >
+                Create one
+              </button>
+            </p>
           </div>
         </div>
 

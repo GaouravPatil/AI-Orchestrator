@@ -31,7 +31,7 @@ Managing Kubernetes clusters traditionally requires deep expertise in `kubectl` 
 
 ## ✨ Key Features
 
-- 🗣️ **Natural Language Kubernetes Control** — Chat with an AI assistant to query pods, nodes, deployments, and services without writing a single `kubectl` command
+- 🗣️ **Natural Language Kubernetes Control** — Chat with an AI assistant powered by **Google Gemini** to query pods, nodes, deployments, and services without writing a single `kubectl` command
 - 🩺 **Real-Time Cluster Health Monitoring** — Background polling continuously tracks cluster state and surfaces health aggregations
 - 🔔 **Multi-Channel Alerting** — Dispatches alerts to Slack, Discord, webhooks, email, and console with built-in deduplication
 - 📊 **Prometheus + Grafana Observability** — Metrics exposed from both monitoring and notification services; auto-provisioned Grafana dashboards
@@ -57,7 +57,7 @@ Managing Kubernetes clusters traditionally requires deep expertise in `kubectl` 
 │  Auth Service│ │  K8s Service │ │    AI Service    │
 │  Port: 8080  │ │  Port: 8001  │ │   Port: 8002     │
 │  JWT + Users │ │  Pods/Nodes/ │ │  NL → K8s Query  │
-│  PostgreSQL  │ │  Deployments │ │  LLM Integration │
+│  PostgreSQL  │ │  Deployments │ │  Google Gemini  │
 └──────────────┘ └──────────────┘ └──────────────────┘
         │               │               │
         └───────────────┼───────────────┘
@@ -116,10 +116,13 @@ AI-Orchestrator/
 │   │
 │   ├── 🤖 ai_service/         # Natural language AI assistant (port 8002)
 │   │   ├── app/
-│   │   │   └── api/chat.py    # Chat endpoint; routes NL → K8s queries
+│   │   │   ├── agents/k8s_agent.py   # Agentic loop: NL → tool calls → Gemini → answer
+│   │   │   ├── services/
+│   │   │   │   └── gemini_service.py # Google Gemini client (OpenAI-compatible API)
+│   │   │   └── api/chat.py           # REST chat endpoint
 │   │   ├── main.py
 │   │   ├── requirements.txt
-│   │   └── .env               # LLM API keys, AI model config
+│   │   └── .env               # GOOGLE_API_KEY, Gemini model config
 │   │
 │   ├── 📡 monitoring_service/ # Real-time cluster health monitoring (port 8003)
 │   │   ├── app/
@@ -250,9 +253,12 @@ AUTH_SERVICE_URL=http://localhost:8080
 
 **`backend/ai_service/.env`**
 ```env
-GEMINI_API_KEY=your-google-gemini-api-key   # or equivalent LLM key
-K8S_SERVICE_URL=http://localhost:8001
-AUTH_SERVICE_URL=http://localhost:8080
+# Get your free API key at: https://aistudio.google.com/apikey
+AI_GOOGLE_API_KEY=your-google-ai-studio-api-key-here
+AI_GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+AI_GEMINI_MODEL=gemini-2.0-flash
+AI_K8S_SERVICE_URL=http://localhost:8001
+AI_AUTH_SERVICE_URL=http://localhost:8080
 ```
 
 **`backend/monitoring_service/.env`**
@@ -401,7 +407,7 @@ User types: "Show me all failing pods"
         │ POST /ai/chat  { "message": "Show me all failing pods" }
         ▼
    AI Service (port 8002)
-        │ Parses intent → calls K8s Service
+        │ Parses intent via Google Gemini API → calls K8s Service
         ▼
    K8s Service (port 8001)
         │ Queries live cluster via kubernetes-python client

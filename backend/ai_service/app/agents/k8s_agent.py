@@ -16,7 +16,7 @@ from typing import Optional
 from ai_service.app.core.config import settings
 from ai_service.app.core.logger import logger
 from ai_service.app.schemas.chat import AgentStep, ToolCall
-from ai_service.app.services.ollama_service import OllamaService
+from ai_service.app.services.gemini_service import GeminiService
 from ai_service.app.tools import k8s_tools
 
 # ── System prompt ─────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ _sessions: dict[str, list[dict]] = {}
 class K8sAgent:
 
     def __init__(self):
-        self.llm = OllamaService()
+        self.llm = GeminiService()
         self.max_iterations = settings.MAX_TOOL_ITERATIONS
 
     def chat(
@@ -124,7 +124,7 @@ class K8sAgent:
             step = AgentStep(iteration=iteration)
 
             # ── Robust JSON extraction ─────────────────────────────────────
-            # llama3 sometimes wraps JSON in ```json ... ``` fences.
+            # Gemini sometimes wraps JSON in ```json ... ``` fences.
             # Strip those before attempting to parse.
             cleaned = raw_reply.strip()
             if cleaned.startswith("```"):
@@ -234,5 +234,5 @@ class K8sAgent:
             "namespace": namespace,
             "steps": steps,
             "model": self.llm.model,
-            "provider": "ollama",
+            "provider": "gemini",
         }

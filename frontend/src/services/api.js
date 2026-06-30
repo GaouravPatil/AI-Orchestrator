@@ -21,12 +21,15 @@ const authHeader = () => ({ Authorization: `Bearer ${getToken()}` });
 
 // ── Auth ─────────────────────────────────────────────────────────────
 export const login = async (email, password) => {
-  const params = new URLSearchParams({ username: email, password });
-  // Try k8s_service /token (same DB, same JWT)
-  const res = await axios.post(`${K8S_URL}/token`, params, {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  });
-  return res.data; // { access_token, token_type }
+  // auth_service /auth/login — JSON body, returns { access_token, token_type }
+  const res = await axios.post(`${AUTH_URL}/auth/login`, { email, password });
+  return res.data;
+};
+
+export const signup = async (name, email, password) => {
+  // auth_service /auth/register — JSON body, returns UserResponse
+  const res = await axios.post(`${AUTH_URL}/auth/register`, { name, email, password });
+  return res.data;
 };
 
 // ── K8s ──────────────────────────────────────────────────────────────
