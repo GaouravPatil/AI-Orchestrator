@@ -42,6 +42,7 @@ export default function AIChat() {
         content: res.answer,
         steps: res.steps ?? [],
         model: res.model,
+        provider: res.provider,
       }]);
     } catch (err) {
       setMessages(prev => [...prev, {
@@ -69,7 +70,9 @@ export default function AIChat() {
           </div>
           <div>
             <h3 className="font-orbitron">AI ASSISTANT</h3>
-            <p>llama3 via Ollama · k8s-aware agent</p>
+            <p style={{ textTransform: 'capitalize' }}>
+              {messages[messages.length - 1]?.provider || 'Ollama'} · Multi-model Routing
+            </p>
           </div>
         </div>
         <div className="aichat-header-right">
@@ -98,15 +101,26 @@ export default function AIChat() {
             </div>
             <div className="chat-bubble">
               <pre className="chat-text">{m.content}</pre>
-              {/* Tool steps */}
-              {m.steps?.filter(s => s.tool_calls?.length > 0).map((s, si) => (
-                <div key={si} className="chat-step">
-                  <span className="step-label font-mono">
-                    ⚡ {s.thought || 'tool call'} →
-                  </span>
-                  {s.tool_calls.map((tc, ti) => (
-                    <span key={ti} className="badge badge-cyan">{tc.name}</span>
-                  ))}
+              {/* Tool and Routing steps */}
+              {m.steps?.filter(s => s.tool_calls?.length > 0 || s.iteration === 0).map((s, si) => (
+                <div key={si} className="chat-step" style={{ display: 'block', marginBottom: '6px' }}>
+                  {s.iteration === 0 ? (
+                    <div style={{ padding: '4px 8px', borderRadius: '4px', background: 'rgba(0, 212, 255, 0.05)', borderLeft: '2px solid var(--cyan)' }}>
+                      <span className="step-label font-mono" style={{ color: 'var(--cyan)' }}>⚡ Query Routing Decision:</span>
+                      <pre className="font-mono" style={{ whiteSpace: 'pre-wrap', margin: '4px 0 0 4px', fontSize: '0.75rem', lineHeight: '1.4', color: 'var(--text-secondary)' }}>
+                        {s.thought}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                      <span className="step-label font-mono">
+                        ⚡ {s.thought || 'tool call'} →
+                      </span>
+                      {s.tool_calls.map((tc, ti) => (
+                        <span key={ti} className="badge badge-cyan">{tc.name}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               {m.model && (

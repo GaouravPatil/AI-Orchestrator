@@ -70,7 +70,11 @@ _sessions: dict[str, list[dict]] = {}
 class K8sAgent:
 
     def __init__(self):
-        self.llm = GeminiService()
+        self.router_llm = GeminiService(model=settings.MODEL_ROUTER)
+        self.fast_llm = GeminiService(model=settings.MODEL_FAST)
+        self.complex_llm = GeminiService(model=settings.MODEL_COMPLEX)
+        # Keep self.llm referencing fast_llm for health check API compatibility
+        self.llm = self.fast_llm
         self.max_iterations = settings.MAX_TOOL_ITERATIONS
 
     def chat(
@@ -81,16 +85,7 @@ class K8sAgent:
         bearer_token: Optional[str] = None,
     ) -> dict:
         """
-        Run the agentic loop for a single user message.
-
-        Args:
-            message:         The user's natural language message.
-            conversation_id: Session ID for conversation continuity.
-            namespace:       Default k8s namespace context.
-            bearer_token:    JWT to forward to k8s_service tool calls.
-
-        Returns:
-            dict with keys: conversation_id, answer, namespace, steps, model, provider
+        Run the bifurcated agentic loop for a user message.
         """
         # ── Setup ──────────────────────────────────────────────────────────
         if conversation_id is None:
@@ -100,43 +95,205 @@ class K8sAgent:
             k8s_tools.set_token(bearer_token)
 
         if conversation_id not in _sessions:
-            _sessions[conversation_id] = [
-                {"role": "system", "content": SYSTEM_PROMPT}
-            ]
+            _sessions[conversation_id] = []
 
-        history = _sessions[conversation_id]
+        global_history = _sessions[conversation_id]
 
-        # Trim history to stay within window
+        # ── Step 1: Bifurcation / Routing Phase ─────────────────────────────
+        logger.info(f"[{conversation_id}] Router analyzing query: '{message}'")
+        
+        # Build prompt for router
+        router_prompt = f"""
+Analyze the user's latest message and determine if it contains multiple independent requests or tasks.
+If it does, split it into distinct, self-contained sub-queries.
+Also, classify each query/sub-query into one of these categories:
+- READ_ONLY: Querying/reading cluster state (e.g., list pods, check node status, show deployments, inspect services).
+- ADMIN: Mutating/changing cluster state (e.g., scale replica count, create deployments, delete resources).
+- DIAGNOSTIC: Investigating failures (e.g., check pod logs, fetch namespace events, analyze crashloops).
+- GENERAL: General chat, greetings, casual talk, or general non-k8s questions.
+
+Output your response strictly as a raw JSON object (no markdown, no backticks, no extra text):
+{{
+  "is_multipart": true,
+  "tasks": [
+    {{"query": "Self-contained sub-query 1", "category": "READ_ONLY/ADMIN/DIAGNOSTIC/GENERAL"}},
+    {{"query": "Self-contained sub-query 2", "category": "READ_ONLY/ADMIN/DIAGNOSTIC/GENERAL"}}
+  ]
+}}
+
+User query: "{message}"
+"""
+        
+        try:
+            raw_router_reply = self.router_llm.generate(router_prompt)
+            cleaned = raw_router_reply.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.split("\n", 1)[-1]
+                if cleaned.endswith("```"):
+                    cleaned = cleaned.rsplit("```", 1)[0]
+                cleaned = cleaned.strip()
+            if not cleaned.startswith("{"):
+                import re
+                json_match = re.search(r'\{[\s\S]*"tasks"[\s\S]*\}', cleaned)
+                if json_match:
+                    cleaned = json_match.group(0)
+
+            router_data = json.loads(cleaned)
+            is_multipart = router_data.get("is_multipart", False)
+            tasks = router_data.get("tasks", [])
+            if not tasks:
+                tasks = [{"query": message, "category": "READ_ONLY"}]
+        except Exception as e:
+            logger.warning(f"[{conversation_id}] Router parsing failed: {e}. Falling back to single task.")
+            is_multipart = False
+            # Fallback heuristic
+            lower_msg = message.lower()
+            category = "READ_ONLY"
+            if any(kw in lower_msg for kw in ["scale", "delete", "create", "deploy"]):
+                category = "ADMIN"
+            elif any(kw in lower_msg for kw in ["why", "failed", "crash", "error", "logs"]):
+                category = "DIAGNOSTIC"
+            tasks = [{"query": message, "category": category}]
+
+        logger.info(f"[{conversation_id}] Bifurcation result: multipart={is_multipart}, tasks={tasks}")
+
+        # ── Step 2: Execution Phase ──────────────────────────────────────────
+        all_steps = []
+        sub_answers = []
+
+        # Create step 0 detailing routing decisions (highly visual trace)
+        routing_desc = f"🔍 Query Router classified input. Multipart={is_multipart}\n"
+        for idx, t in enumerate(tasks, 1):
+            target_model = settings.MODEL_FAST if t["category"] in ("READ_ONLY", "GENERAL") else settings.MODEL_COMPLEX
+            routing_desc += f"  ↳ Task {idx}: '{t['query']}' [{t['category']}] routed to {target_model}\n"
+
+        all_steps.append(AgentStep(
+            iteration=0,
+            thought=routing_desc.strip(),
+            tool_calls=[],
+            tool_results=[]
+        ))
+
+        for idx, task in enumerate(tasks, 1):
+            sub_query = task["query"]
+            category = task["category"]
+            
+            logger.info(f"[{conversation_id}] Executing sub-task {idx}/{len(tasks)}: '{sub_query}' [{category}]")
+            sub_answer, sub_steps = self._run_sub_agent(
+                query=sub_query,
+                category=category,
+                history_context=global_history,
+                namespace=namespace,
+            )
+            sub_answers.append(sub_answer)
+            # Offset iteration count for sub-steps to display sequentially in UI trace
+            for s in sub_steps:
+                s.iteration = len(all_steps)
+                all_steps.append(s)
+
+        # ── Step 3: Synthesis Phase ──────────────────────────────────────────
+        if is_multipart and len(tasks) > 1:
+            logger.info(f"[{conversation_id}] Consolidating answers for multi-part query...")
+            synthesis_prompt = f"""
+You are a consolidator for a Kubernetes cluster management assistant.
+Your job is to combine the results of multiple sub-queries into a single, cohesive, professional response.
+Make sure the response addresses all parts of the user's original query.
+Do not mention that you are a consolidator or that the query was split. Simply present the final merged answer.
+
+User original query: "{message}"
+
+Sub-task results:
+"""
+            for t, ans in zip(tasks, sub_answers):
+                synthesis_prompt += f"\n- Sub-task: {t['query']}\n  Result: {ans}\n"
+
+            try:
+                final_answer = self.fast_llm.generate(synthesis_prompt)
+            except Exception as e:
+                logger.error(f"[{conversation_id}] Synthesis failed: {e}")
+                final_answer = "\n\n".join([f"**Part {idx} ({t['query']}):**\n{ans}" for idx, (t, ans) in enumerate(zip(tasks, sub_answers), 1)])
+        else:
+            final_answer = sub_answers[0] if sub_answers else "No result generated."
+
+        # ── Step 4: Persist Clean Global History ─────────────────────────────
+        # Only store the original user question and final synthesized response in the history.
+        # This completely avoids polluting context window with intermediate tool JSONs!
+        global_history.append({"role": "user", "content": message})
+        global_history.append({"role": "assistant", "content": final_answer})
+
+        # Trim global history to stay within rolling window
         max_msgs = settings.MAX_HISTORY_MESSAGES
-        if len(history) > max_msgs:
-            history = [history[0]] + history[-(max_msgs - 1):]
+        if len(global_history) > max_msgs:
+            global_history = global_history[-max_msgs:]
 
-        history.append({"role": "user", "content": message})
+        _sessions[conversation_id] = global_history
 
-        # ── Agentic loop ───────────────────────────────────────────────────
+        # Determine which model responded (or default settings)
+        used_model = settings.MODEL_FAST if not is_multipart else f"{settings.MODEL_ROUTER} + {settings.MODEL_FAST}/{settings.MODEL_COMPLEX} (orchestrated)"
+
+        return {
+            "conversation_id": conversation_id,
+            "answer": final_answer,
+            "namespace": namespace,
+            "steps": all_steps,
+            "model": used_model,
+            "provider": self.router_llm.provider,
+        }
+
+    def _run_sub_agent(
+        self,
+        query: str,
+        category: str,
+        history_context: list[dict],
+        namespace: str,
+    ) -> tuple[str, list[AgentStep]]:
+        """
+        Run a single sub-agent execution loop.
+        """
+        # General chat: bypass tool agent loop entirely to save tokens and time
+        if category == "GENERAL":
+            messages = [
+                {"role": "system", "content": "You are a helpful, professional DevOps assistant. Keep your response brief and friendly."}
+            ]
+            # Copy recent history (only user/assistant roles, ignoring system/tool details)
+            for msg in history_context[-4:]:
+                if msg["role"] in ("user", "assistant"):
+                    messages.append(msg)
+            messages.append({"role": "user", "content": query})
+            
+            try:
+                reply = self.fast_llm.chat(messages)
+                return reply, []
+            except Exception as e:
+                logger.error(f"Failed general sub-agent chat: {e}")
+                return f"I encountered an error replying to your request: {e}", []
+
+        # Read-only uses fast model; Admin/Diagnostics use complex model
+        llm = self.fast_llm if category == "READ_ONLY" else self.complex_llm
+        model_name = llm.model
+
+        # Build clean temporary history context
+        temp_history = [{"role": "system", "content": SYSTEM_PROMPT}]
+        for msg in history_context:
+            if msg["role"] in ("user", "assistant"):
+                temp_history.append(msg)
+
+        temp_history.append({"role": "user", "content": query})
+
         steps: list[AgentStep] = []
         answer = ""
 
         for iteration in range(1, self.max_iterations + 1):
-            logger.info(f"[{conversation_id}] Agent iteration {iteration}")
-
-            raw_reply = self.llm.chat(history)
+            raw_reply = llm.chat(temp_history)
             step = AgentStep(iteration=iteration)
 
-            # ── Robust JSON extraction ─────────────────────────────────────
-            # Gemini sometimes wraps JSON in ```json ... ``` fences.
-            # Strip those before attempting to parse.
+            # JSON extraction and clean up
             cleaned = raw_reply.strip()
             if cleaned.startswith("```"):
-                # Remove opening fence (```json or ``` etc.)
                 cleaned = cleaned.split("\n", 1)[-1]
-                # Remove closing fence
                 if cleaned.endswith("```"):
                     cleaned = cleaned.rsplit("```", 1)[0]
                 cleaned = cleaned.strip()
-
-            # Also try to extract a JSON object from within the text
-            # in case the LLM added preamble before the JSON
             if not cleaned.startswith("{"):
                 import re
                 json_match = re.search(r'\{[\s\S]*"action"[\s\S]*\}', cleaned)
@@ -148,14 +305,14 @@ class K8sAgent:
                 parsed = json.loads(cleaned)
                 if isinstance(parsed, dict) and "action" in parsed:
                     tool_name = parsed["action"]
-                    params    = parsed.get("params", {})
-                    thought   = parsed.get("thought", "")
+                    params = parsed.get("params", {})
+                    thought = parsed.get("thought", "")
 
                     step.thought = thought
 
                     if tool_name not in TOOL_MAP:
-                        logger.warning(f"Unknown tool requested: {tool_name}")
-                        answer = f"I tried to call an unknown tool '{tool_name}'. Please rephrase."
+                        logger.warning(f"Unknown tool: {tool_name}")
+                        answer = f"I tried to call an unknown tool '{tool_name}'."
                         break
 
                     tc = ToolCall(
@@ -165,13 +322,13 @@ class K8sAgent:
                     )
                     step.tool_calls.append(tc)
 
-                    logger.info(f"[{conversation_id}] Calling tool: {tool_name}({params})")
+                    logger.info(f"Sub-agent calling tool: {tool_name}({params})")
                     tool_result = TOOL_MAP[tool_name](**params)
                     step.tool_results.append({"tool": tool_name, "result": tool_result})
 
-                    # Feed result back into history
-                    history.append({"role": "assistant", "content": raw_reply})
-                    history.append({
+                    # Feed tool output back to sub-agent context
+                    temp_history.append({"role": "assistant", "content": raw_reply})
+                    temp_history.append({
                         "role": "user",
                         "content": (
                             f"Tool '{tool_name}' returned:\n"
@@ -180,27 +337,19 @@ class K8sAgent:
                             "Do NOT output JSON."
                         ),
                     })
-
                     tool_called = True
-
             except (json.JSONDecodeError, TypeError):
-                # ── LLM replied in plain text ──────────────────────────────
-                # On iteration 1, if the reply looks like hallucinated data
-                # (no tool was called but question needs real cluster info),
-                # inject a correction and retry once.
+                # Plain text reply, or tool skip handling
                 if iteration == 1 and not tool_called:
                     tool_keywords = [
                         "node", "pod", "deployment", "namespace", "service",
                         "log", "scale", "delete", "create", "event", "cluster"
                     ]
-                    original_msg = history[-2]["content"] if len(history) >= 2 else ""
-                    needs_tool = any(kw in original_msg.lower() for kw in tool_keywords)
+                    needs_tool = any(kw in query.lower() for kw in tool_keywords)
                     if needs_tool:
-                        logger.warning(
-                            f"[{conversation_id}] LLM skipped tool on iteration 1 — injecting correction"
-                        )
-                        history.append({"role": "assistant", "content": raw_reply})
-                        history.append({
+                        logger.warning("Sub-agent skipped tool call on iteration 1 — forcing retry")
+                        temp_history.append({"role": "assistant", "content": raw_reply})
+                        temp_history.append({
                             "role": "user",
                             "content": (
                                 "IMPORTANT: You must NOT guess or invent cluster data. "
@@ -215,24 +364,9 @@ class K8sAgent:
             steps.append(step)
 
             if not tool_called:
-                # LLM gave a plain-text answer — we're done
                 answer = raw_reply
-                history.append({"role": "assistant", "content": answer})
                 break
-
         else:
-            # Hit max iterations without a plain-text answer
-            answer = "I've reached the maximum number of tool calls. Please try a more specific question."
-            logger.warning(f"[{conversation_id}] Max iterations ({self.max_iterations}) reached.")
+            answer = "The sub-agent reached maximum tool iterations."
 
-        # Persist trimmed history
-        _sessions[conversation_id] = history
-
-        return {
-            "conversation_id": conversation_id,
-            "answer": answer,
-            "namespace": namespace,
-            "steps": steps,
-            "model": self.llm.model,
-            "provider": "gemini",
-        }
+        return answer, steps
