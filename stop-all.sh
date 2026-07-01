@@ -27,8 +27,8 @@ kill_port() {
   local pid
   pid=$(lsof -ti tcp:"$port" 2>/dev/null || true)
   if [ -n "$pid" ]; then
-    kill "$pid" 2>/dev/null || true
-    echo -e "  ${GREEN}✅ $name (port $port) stopped — PID $pid${NC}"
+    kill -9 $pid 2>/dev/null || true
+    echo -e "  ${GREEN}✅ $name (port $port) stopped — PIDs: $pid${NC}"
   else
     echo -e "  ${YELLOW}–  $name (port $port) was not running${NC}"
   fi
