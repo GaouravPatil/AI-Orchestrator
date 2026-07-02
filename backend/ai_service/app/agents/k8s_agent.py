@@ -228,8 +228,34 @@ Sub-task results:
 
         _sessions[conversation_id] = global_history
 
-        # Determine which model responded (or default settings)
-        used_model = settings.MODEL_FAST if not is_multipart else f"{settings.MODEL_ROUTER} + {settings.MODEL_FAST}/{settings.MODEL_COMPLEX} (orchestrated)"
+        # Determine which models and providers responded
+        invoked_models = []
+        invoked_providers = []
+
+        if is_multipart and len(tasks) > 1:
+            invoked_models.append(f"router:{self.router_llm.model}")
+            invoked_providers.append(self.router_llm.provider)
+
+        for task in tasks:
+            cat = task["category"]
+            if cat == "GENERAL":
+                # General chats only run fast LLM and don't call tools
+                model_lbl = f"fast:{self.fast_llm.model}"
+                prov_lbl = self.fast_llm.provider
+            elif cat == "READ_ONLY":
+                model_lbl = f"fast:{self.fast_llm.model}"
+                prov_lbl = self.fast_llm.provider
+            else:
+                model_lbl = f"complex:{self.complex_llm.model}"
+                prov_lbl = self.complex_llm.provider
+
+            if model_lbl not in invoked_models:
+                invoked_models.append(model_lbl)
+            if prov_lbl not in invoked_providers:
+                invoked_providers.append(prov_lbl)
+
+        used_model = " + ".join(invoked_models)
+        used_provider = " / ".join(invoked_providers)
 
         return {
             "conversation_id": conversation_id,
@@ -237,7 +263,7 @@ Sub-task results:
             "namespace": namespace,
             "steps": all_steps,
             "model": used_model,
-            "provider": self.router_llm.provider,
+            "provider": used_provider,
         }
 
     def _run_sub_agent(

@@ -45,6 +45,16 @@ def chat(
 def health():
     return {
         "status": "running",
-        "model": agent.llm.model,
-        "provider": "gemini",
+        "router": {
+            "model": agent.router_llm.model,
+            "provider": agent.router_llm.provider,
+        },
+        "fast": {
+            "model": agent.fast_llm.model,
+            "provider": agent.fast_llm.provider,
+        },
+        "complex": {
+            "model": agent.complex_llm.model,
+            "provider": agent.complex_llm.provider,
+        }
     }

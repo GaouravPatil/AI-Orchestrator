@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
 
     # ── LLM Provider Setup ──────────────────────────────────────────────
-    LLM_PROVIDER: str = "gemini"                                   # "gemini", "ollama", "openai"
+    LLM_PROVIDER: str = "gemini"                                   # "gemini", "ollama", "openrouter", "openai"
     LLM_BASE_URL: str = ""                                         # e.g. "http://localhost:11434/v1" for Ollama
     LLM_API_KEY: str = ""                                          # optional for local setups
 
@@ -33,10 +33,14 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-2.0-flash"                         # default fallback model
     GEMINI_TIMEOUT: float = 60.0
 
+    # ── OpenRouter defaults ─────────────────────────────────────────────
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+
     # ── Multi-Model Router / Bifurcation ──────────────────────────────
-    MODEL_ROUTER: str = "gemini-2.0-flash"                         # routing and splitting (gemini model or ollama model name like "llama3")
-    MODEL_FAST: str = "gemini-2.0-flash"                           # cheap/fast read-only queries and general chat (e.g. "llama3" or "qwen2.5:3b")
-    MODEL_COMPLEX: str = "gemini-1.5-pro"                          # accurate/smart for admin changes (e.g. "llama3" or "qwen2.5:7b")
+    MODEL_ROUTER: str = "gemini-2.0-flash"                         # routing and splitting (e.g. "google/gemini-2.5-flash", "openrouter/qwen/qwen-2.5-coder-32b:free")
+    MODEL_FAST: str = "gemini-2.0-flash"                           # cheap/fast read-only queries and general chat
+    MODEL_COMPLEX: str = "gemini-1.5-pro"                          # accurate/smart for admin changes (e.g. "openrouter/deepseek/deepseek-r1:free")
 
     # ── Agentic loop ────────────────────────────────────────────────────
     MAX_TOOL_ITERATIONS: int = 8       # safety cap on recursive tool calls
